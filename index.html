@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>BM 뽑기 시뮬레이터 (엑셀 기반 확률 내장)</title>
+<style>
+  :root { --bg:#0b1020; --card:#121a33; --text:#e7ecff; --sub:#9fb2ff; --ok:#4ade80; --warn:#f59e0b; }
+  html,body{background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Apple SD Gothic Neo,'Noto Sans KR',sans-serif;margin:0}
+  .wrap{max-width:980px;margin:24px auto;padding:0 16px}
+  .title{font-weight:800;font-size:28px}
+  .subtitle{color:var(--sub);margin-top:4px}
+  .card{background:linear-gradient(180deg,#121a33 0%,#0e1530 100%);border:1px solid #1e2a57;border-radius:16px;padding:16px}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .btn{cursor:pointer;border:1px solid #2b3a73;background:#162149;color:var(--text);border-radius:12px;padding:12px 18px;font-weight:700}
+  .btn:hover{background:#1c295a}.btn:active{transform:scale(.98)}
+  .pill{display:inline-flex;align-items:center;gap:8px;background:#0f1734;border:1px solid #283a7d;border-radius:999px;padding:8px 12px;color:#9fb2ff}
+  .stat{min-width:140px}
+  .log{max-height:360px;overflow:auto;border-top:1px solid #243268;margin-top:12px;padding-top:12px;font-family:ui-monospace,Consolas,Menlo,monospace;font-size:13px}
+  .badge{border-radius:999px;padding:2px 8px;font-size:12px}
+  .pickup{background:rgba(74,222,128,.18);border:1px solid rgba(74,222,128,.5);color:#b8f7cc}
+  .nonpickup{background:rgba(245,158,11,.18);border:1px solid rgba(245,158,11,.5);color:#fde1aa}
+  .mode{font-weight:800;color:#b4c6ff}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="title">BM 뽑기 시뮬레이터</div>
+    <div class="subtitle">엑셀 표(비균일) 확률 그대로 내장 · 1뽑/10뽑 · 성공 시 규칙(픽업→반천장 / 상시→확천장)</div>
+
+    <div class="card" style="margin-top:16px;">
+      <div class="row" style="justify-content: space-between;">
+        <div class="row">
+          <div class="pill">현재 모드&nbsp; <span class="mode" id="modeText">반천장(50% 픽업)</span></div>
+          <div class="pill" style="margin-left:8px;">
+            <label for="startMode" style="margin-right:8px;">시작 모드</label>
+            <select id="startMode">
+              <option value="50" selected>반천장(50%)</option>
+              <option value="100">확천장(100%)</option>
+            </select>
+            <button class="btn" id="applyStart" style="margin-left:8px;">적용</button>
+          </div>
+        </div>
+        <div class="row">
+          <button class="btn" id="onePull">1뽑</button>
+          <button class="btn" id="tenPull">10뽑</button>
+          <button class="btn" id="hundredPull">100뽑</button>
+          <button class="btn" id="reset">초기화</button>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:12px; gap:16px;">
+        <div class="pill stat">총 뽑기: <b id="totalDraws">0</b></div>
+        <div class="pill stat">성공(히트): <b id="hits">0</b></div>
+        <div class="pill stat">픽업: <b id="pickups">0</b></div>
+        <div class="pill stat">반천 평균: <b id="avgPity50">-</b></div>
+        <div class="pill stat">확천 평균: <b id="avgPity100">-</b></div>
+        <div class="pill stat">현재 피티: <b id="pity">0</b></div>
+      </div>
+
+      <div class="log" id="log"></div>
+    </div>
+
+    <div class="card" style="margin-top:16px;">
+      <div class="subtitle">확률표(엑셀 기반, 내장)</div>
+      <details style="margin-top:8px;"><summary>상세 보기</summary>
+        <pre id="probDump" style="white-space:pre-wrap; color:#cfe0ff;"></pre>
+      </details>
+    </div>
+  </div>
+
+<script>
+// ===== 엑셀 BM.xlsx에서 추출한 실제 확률 =====
+// const CONFIG = {
+//   probs_50: [
+//     0.001, 0.002, 0.003, 0.004, 0.005, 0.006, 0.007, 0.008, 0.009, 0.01,
+//     0.011, 0.012, 0.013, 0.014, 0.015, 0.016, 0.017, 0.018, 0.019, 0.02,
+//     0.024, 0.028, 0.032, 0.036, 0.04, 0.044, 0.048, 0.052, 0.056, 0.06,
+//     0.064, 0.068, 0.072, 0.076, 0.08, 0.084, 0.088, 0.092, 0.096, 0.1,
+//     0.11, 0.12, 0.13, 0.14, 0.15, 0.16, 0.17, 0.18, 0.19, 0.2,
+//     0.21, 0.22, 0.23, 0.24, 0.25, 0.26, 0.27, 0.28, 0.29, 0.3,
+//     0.335, 0.37, 0.405, 0.44, 0.475, 0.51, 0.545, 0.58, 0.615, 0.65,
+//     0.685, 0.72, 0.755, 0.79, 0.825, 0.86, 0.895, 0.93, 0.965, 1
+//   ],
+//   probs_100: [
+//     0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1,
+//     0.11, 0.12, 0.13, 0.14, 0.15, 0.16, 0.17, 0.18, 0.19, 0.2,
+//     0.24, 0.28, 0.32, 0.36, 0.4, 0.44, 0.48, 0.52, 0.56, 0.6,
+//     0.64, 0.68, 0.72, 0.76, 0.8, 0.84, 0.88, 0.92, 0.96, 1
+//   ]
+// };
+
+// ===== BM2.xlsx (Sheet2) 기반 확률 =====
+// const CONFIG = {
+//   probs_50: [
+//     0.0005, 0.001, 0.0015, 0.002, 0.0025, 0.003, 0.0035, 0.004, 0.0045, 0.005,
+//     0.0055, 0.006, 0.0065, 0.007, 0.0075, 0.008, 0.0085, 0.009, 0.0095, 0.01,
+//     0.012, 0.014, 0.016, 0.018, 0.02, 0.022, 0.024, 0.026, 0.028, 0.03,
+//     0.032, 0.034, 0.036, 0.038, 0.04, 0.042, 0.044, 0.046, 0.048, 0.05,
+//     0.06, 0.07, 0.08, 0.09, 0.1, 0.11, 0.12, 0.13, 0.14, 0.15,
+//     0.16, 0.17, 0.18, 0.19, 0.2, 0.21, 0.22, 0.23, 0.24, 0.25,
+//     0.2875, 0.325, 0.3625, 0.4, 0.4375, 0.475, 0.5125, 0.55, 0.5875, 0.625,
+//     0.6625, 0.7, 0.7375, 0.775, 0.8125, 0.85, 0.8875, 0.925, 0.9625, 1
+//   ],
+//   probs_100: [
+//     0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1,
+//     0.11, 0.12, 0.13, 0.14, 0.15, 0.16, 0.17, 0.18, 0.19, 0.2,
+//     0.24, 0.28, 0.32, 0.36, 0.4, 0.44, 0.48, 0.52, 0.56, 0.6,
+//     0.64, 0.68, 0.72, 0.76, 0.8, 0.84, 0.88, 0.92, 0.96, 1
+//   ]
+// };
+
+// --- CONFIG (from BM3.xlsx) --- 
+// const CONFIG = { 
+//     probs_50: [ 
+//         0.0005, 0.001, 0.0015, 0.002, 0.0025, 0.003, 0.0035, 0.004, 0.0045, 0.005, 
+//         0.0055, 0.006, 0.0065, 0.007, 0.0075, 0.008, 0.0085, 0.009, 0.0095, 0.01, 
+//         0.011, 0.012, 0.013, 0.014, 0.015, 0.016, 0.017, 0.018, 0.019, 0.02, 
+//         0.021, 0.022, 0.023, 0.024, 0.025, 0.026, 0.027, 0.028, 0.029, 0.03, 
+//         0.0335, 0.037, 0.0405, 0.044, 0.0475, 0.051, 0.0545, 0.058, 0.0615, 0.065, 
+//         0.0685, 0.072, 0.0755, 0.079, 0.0825, 0.086, 0.0895, 0.093, 0.0965, 0.1, 
+//         0.145, 0.19, 0.235, 0.28, 0.325, 0.37, 0.415, 0.46, 0.505, 0.55, 
+//         0.595, 0.64, 0.685, 0.73, 0.775, 0.82, 0.865, 0.91, 0.955, 1 
+//     ], 
+//     probs_100: [ 
+//         0.0015, 0.003, 0.0045, 0.006, 0.0075, 0.009, 0.0105, 0.012, 0.0135, 0.015, 
+//         0.0165, 0.018, 0.0195, 0.021, 0.0225, 0.024, 0.0255, 0.027, 0.0285, 0.03, 
+//         0.0785, 0.127, 0.1755, 0.224, 0.2725, 0.321, 0.3695, 0.418, 0.4665, 0.515, 
+//         0.5635, 0.612, 0.6605, 0.709, 0.7575, 0.806, 0.8545, 0.903, 0.9515, 1 
+//     ] 
+// };
+
+// --- CONFIG (from BM4.xlsx) ---
+const CONFIG = {
+  probs_50: [
+    0.00025, 0.0005, 0.00075, 0.001, 0.00125, 0.0015, 0.00175, 0.002, 0.00225, 0.0025,
+    0.00275, 0.003, 0.00325, 0.0035, 0.00375, 0.004, 0.00425, 0.0045, 0.00475, 0.005,
+    0.0055, 0.006, 0.0065, 0.007, 0.0075, 0.008, 0.0085, 0.009, 0.0095, 0.01,
+    0.0105, 0.011, 0.0115, 0.012, 0.0125, 0.013, 0.0135, 0.014, 0.0145, 0.015,
+    0.01625, 0.0175, 0.01875, 0.02, 0.02125, 0.0225, 0.02375, 0.025, 0.02625, 0.0275,
+    0.02875, 0.03, 0.03125, 0.0325, 0.03375, 0.035, 0.03625, 0.0375, 0.03875, 0.04,
+    0.086, 0.132, 0.178, 0.224, 0.27, 0.316, 0.362, 0.408, 0.454, 0.5,
+    0.55, 0.6, 0.65, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1
+  ],
+  probs_100: [
+    0.0008, 0.0016, 0.0024, 0.0032, 0.004, 0.0048, 0.0056, 0.0064, 0.0072, 0.008,
+    0.0088, 0.0096, 0.0104, 0.0112, 0.012, 0.0128, 0.0136, 0.0144, 0.0152, 0.016,
+    0.0184, 0.0208, 0.0232, 0.0256, 0.028, 0.0304, 0.0328, 0.0352, 0.0376, 0.04,
+    0.136, 0.232, 0.328, 0.424, 0.52, 0.616, 0.712, 0.808, 0.904, 1
+  ]
+};
+
+
+// ===== 상태 =====
+const state = {
+  mode: "50",                  // "50" = 반천장(50% 픽업), "100" = 확천장(100% 픽업)
+  pity: 0,
+  totalDraws: 0,
+  hits: 0,
+  pickups: 0,
+  // 성공 기록을 { value: 피티, mode: "50"|"100" } 형태로 저장 (평균 분리용)
+  pityOnSuccess: [],
+  logLines: []
+};
+
+// ===== 유틸 =====
+function rng(){ return Math.random(); }
+function avg(a){ return a.length ? a.reduce((x,y)=>x+y,0)/a.length : NaN; }
+function getProb(mode, pity){
+  const arr = mode==="50" ? CONFIG.probs_50 : CONFIG.probs_100;
+  if(!arr.length) return 0;
+  const idx = Math.min(Math.max(pity,1), arr.length) - 1;
+  return arr[idx] || 0;
+}
+function appendLog(text, type){
+  const log = document.getElementById('log');
+  const node = document.createElement('div');
+  if(type==="pickup"){
+    node.innerHTML = `<span class="badge pickup">픽업</span> <span></span>`;
+    node.querySelector('span:last-child').textContent = text;
+  }else if(type==="nonpickup"){
+    node.innerHTML = `<span class="badge nonpickup">상시</span> <span></span>`;
+    node.querySelector('span:last-child').textContent = text;
+  }else{
+    node.textContent = text;
+  }
+  log.prepend(node);
+}
+
+// ===== 렌더 =====
+function render(){
+  document.getElementById('modeText').textContent = state.mode==="50" ? "반천장(50% 픽업)" : "확천장(100% 픽업)";
+  document.getElementById('pity').textContent = state.pity;
+  document.getElementById('totalDraws').textContent = state.totalDraws;
+  document.getElementById('hits').textContent = state.hits;
+  document.getElementById('pickups').textContent = state.pickups;
+
+  // 모드별 평균 피티 계산
+  const pity50 = state.pityOnSuccess.filter(x => x.mode === "50").map(x => x.value);
+  const pity100 = state.pityOnSuccess.filter(x => x.mode === "100").map(x => x.value);
+  const avg50 = pity50.length ? (pity50.reduce((a,b)=>a+b,0) / pity50.length) : NaN;
+  const avg100 = pity100.length ? (pity100.reduce((a,b)=>a+b,0) / pity100.length) : NaN;
+
+  document.getElementById('avgPity50').textContent = isNaN(avg50) ? "-" : avg50.toFixed(2);
+  document.getElementById('avgPity100').textContent = isNaN(avg100) ? "-" : avg100.toFixed(2);
+
+  const p50 = (CONFIG.probs_50||[]).map(v => (v*100).toFixed(2)+'%').join(', ');
+  const p100 = (CONFIG.probs_100||[]).map(v => (v*100).toFixed(2)+'%').join(', ');
+  document.getElementById('probDump').textContent = ["반천장:", p50, "", "확천장:", p100].join("\n");
+}
+
+// ===== 동작 =====
+function drawOnce(){
+  // 현재 모드 기준으로 이 시도의 확률을 적용한다
+  state.pity += 1;
+  const beforeMode = state.mode;         // 성공 기록용 (전환 되기 전 모드)
+  const p = getProb(beforeMode, state.pity);
+  const hit = rng() < p;
+  let isPickup = false;
+
+  if(hit){
+    const pityBeforeReset = state.pity;
+    state.hits += 1;
+
+    // 결과: 반천장 모드면 50% 픽업, 확천장은 무조건 픽업
+    isPickup = (beforeMode==="50") ? (rng()<0.5) : true;
+
+    // 성공 기록(평균 분리용) — 전환 전에 쓰인 모드로 기록
+    state.pityOnSuccess.push({ value: pityBeforeReset, mode: beforeMode });
+
+    if(isPickup){
+      state.pickups += 1;
+      state.mode = "50"; // 픽업 → 반천장
+      appendLog(`[픽업 HIT] pity=${String(pityBeforeReset).padStart(3,' ')} 확률=${(p*100).toFixed(2)}% → 모드=반천장`, "pickup");
+    }else{
+      state.mode = "100"; // 상시 → 확천장
+      appendLog(`[상시 HIT] pity=${String(pityBeforeReset).padStart(3,' ')} 확률=${(p*100).toFixed(2)}% → 모드=확천장`, "nonpickup");
+    }
+    state.pity = 0; // 성공 시 초기화
+  }else{
+    appendLog(`[-] 실패 pity=${String(state.pity).padStart(3,' ')} 확률=${(p*100).toFixed(2)}%`);
+  }
+  state.totalDraws += 1;
+  render();
+}
+
+function tenPull(){ for(let i=0;i<10;i++) drawOnce(); }
+function hundredPull(){ for(let i=0;i<100;i++) drawOnce(); }
+
+
+function resetAll(){
+  state.mode = document.getElementById('startMode').value;
+  state.pity = 0; state.totalDraws = 0; state.hits = 0; state.pickups = 0;
+  state.pityOnSuccess = []; state.logLines = [];
+  document.getElementById('log').innerHTML = "";
+  render();
+}
+
+// 이벤트
+document.getElementById('onePull').addEventListener('click', drawOnce);
+document.getElementById('tenPull').addEventListener('click', tenPull);
+document.getElementById('hundredPull').addEventListener('click', hundredPull);
+document.getElementById('reset').addEventListener('click', resetAll);
+document.getElementById('applyStart').addEventListener('click', ()=>{ state.mode=document.getElementById('startMode').value; render(); });
+
+// 시작 렌더
+render();
+</script>
+</body>
+</html>
