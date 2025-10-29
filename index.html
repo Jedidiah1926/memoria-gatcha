@@ -18,8 +18,8 @@
   .stat{min-width:140px}
   .log{max-height:360px;overflow:auto;border-top:1px solid #243268;margin-top:12px;padding-top:12px;font-family:ui-monospace,Consolas,Menlo,monospace;font-size:13px}
   .badge{border-radius:999px;padding:2px 8px;font-size:12px}
-  .pickup{background:rgba(74,222,128,.18);border:1px solid rgba(74,222,128,.5);color:#b8f7cc}
-  .nonpickup{background:rgba(245,158,11,.18);border:1px solid rgba(245,158,11,.5);color:#fde1aa}
+  .pickup{background:rgba(245,158,11,.18);border:1px solid rgba(245,158,11,.5);color:#fde1aa}
+  .nonpickup{background:rgba(11, 159, 245, 0.18);border:1px solid rgba(11, 148, 245, 0.5);color:#aadffd}
   .mode{font-weight:800;color:#b4c6ff}
 </style>
 </head>
@@ -239,10 +239,10 @@ function appendLog(text, type){
   const log = document.getElementById('log');
   const node = document.createElement('div');
   if(type==="pickup"){
-    node.innerHTML = `<span class="badge pickup">픽업</span> <span></span>`;
+    node.innerHTML = `<span class="badge pickup">★★★★★</span> <span></span>`;
     node.querySelector('span:last-child').textContent = text;
   }else if(type==="nonpickup"){
-    node.innerHTML = `<span class="badge nonpickup">상시</span> <span></span>`;
+    node.innerHTML = `<span class="badge nonpickup">★★★★★</span> <span></span>`;
     node.querySelector('span:last-child').textContent = text;
   }else{
     node.textContent = text;
@@ -291,14 +291,14 @@ function drawOnce(){
     if(isPickup){
       state.pickups += 1;
       state.mode = "50";
-      appendLog(`[픽업 HIT] pity=${String(pityBeforeReset).padStart(3,' ')} 확률=${(p*100).toFixed(2)}% → 모드=반천장`, "pickup");
+      appendLog(`[픽업] pity=${String(pityBeforeReset).padStart(3,' ')} 확률=${(p*100).toFixed(5)}% → 모드=반천장`, "pickup");
     }else{
       state.mode = "100";
-      appendLog(`[상시 HIT] pity=${String(pityBeforeReset).padStart(3,' ')} 확률=${(p*100).toFixed(2)}% → 모드=확천장`, "nonpickup");
+      appendLog(`[상시] pity=${String(pityBeforeReset).padStart(3,' ')} 확률=${(p*100).toFixed(5)}% → 모드=확천장`, "nonpickup");
     }
     state.pity = 0;
   }else{
-    appendLog(`[-] 실패 pity=${String(state.pity).padStart(3,' ')} 확률=${(p*100).toFixed(2)}%`);
+    appendLog(`[실패] pity=${String(state.pity).padStart(3,' ')} 확률=${(p*100).toFixed(5)}%`);
   }
   state.totalDraws += 1;
   render();
